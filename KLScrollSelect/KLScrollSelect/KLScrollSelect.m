@@ -35,7 +35,7 @@
 -(void) startScrollingDriver;
 -(void) stopScrollingDriver;
 
-
+-(BOOL) isTracking;
 -(NSArray*) columnsWithoutColumn:(KLScrollingColumn*) column;
 -(void) updateDriverOffset;
 
@@ -49,6 +49,14 @@
 -(BOOL) animating;
 @end
 @implementation KLScrollSelect
+-(BOOL) isTracking {
+    for (KLScrollingColumn* column in self.columns) {
+        if (column.tracking || column.decelerating) {
+            return YES;
+        }
+    }
+    return  NO;
+}
 -(BOOL) animating {
     return  (BOOL)self.animationTimer;
 }
@@ -128,8 +136,7 @@
     if (self.animating) {
         return;
     }
-    CGFloat animationDuration = 0.5f / self.driver.scrollRate;
-    self.animationTimer = [NSTimer scheduledTimerWithTimeInterval: animationDuration
+    self.animationTimer = [NSTimer scheduledTimerWithTimeInterval: 1.0
                                                            target:self
                                                          selector:@selector(updateDriverAnimation)
                                                          userInfo:nil
@@ -140,10 +147,22 @@
     [self updateDriverOffset];
 }
 -(void) updateDriverOffset {
-    CGFloat pointChange = 0.5;
+    
+    CGFloat pointChange = self.driver.scrollRate;
     CGPoint newOffset = self.driver.contentOffset;
     newOffset.y = newOffset.y + pointChange;
-    [self.driver setContentOffset: newOffset];
+    [UIView animateWithDuration: 1.0
+                          delay: 0.0
+                        options: UIViewAnimationOptionAllowUserInteraction | UIViewAnimationOptionCurveLinear
+                     animations:^{
+                         [self.driver setContentOffset: newOffset];
+                     } completion:^(BOOL finished) {
+                         //Do nothing
+                         if (!finished) {
+                             NSLog(@"Didnt Finish animation!");
+                             
+                         }
+                     }];
 }
 
 - (void)stopScrollingDriver {
@@ -249,10 +268,12 @@
     return [self.columns indexOfObject: column];
 }
 - (void) willUpdateContentOffsetForColumn: (KLScrollingColumn*) column {
-    if (column == self.driver) {
-    }
+    [self stopScrollingDriver];
 }
 - (void) didUpdateContentOffsetForColumn: (KLScrollingColumn*) column {
+    if (column.isResettingContent && !self.isTracking) {
+        [self startScrollingDriver];
+    }
     if (column == self.driver) {
         [self synchronizeColumnsForMainDriver];
     }
@@ -263,7 +284,6 @@
 @interface KLScrollingColumn()
 {
     int mTotalCellsVisible;
-    BOOL isResettingContent;
     NSInteger _totalRows;
 }
 - (void) resetContentOffsetIfNeeded;
@@ -284,14 +304,15 @@
     //check the top condition
     //check if the scroll view reached its top.. if so.. move it to center.. remember center is the start of the data repeating for 2nd time.
     if ([self didReachTopBounds] || [self didReachBottomBounds]) {
-        isResettingContent = YES;
+        self.isResettingContent = YES;
+        
         if([self didReachTopBounds])
             contentOffset.y = self.contentSize.height/3.0f;
         else if([self didReachBottomBounds] )//scrollview content offset reached bottom minus the height of the tableview
             //this scenario is same as the data repeating for 2nd time minus the height of the table view
             contentOffset.y = self.contentSize.height/3.0f - self.bounds.size.height;
         [self setContentOffset: contentOffset];
-        isResettingContent = NO;
+        self.isResettingContent = NO;
     }
 }
 
@@ -315,14 +336,14 @@
 #pragma mark - Touch methods
 -(void) setContentOffset:(CGPoint)contentOffset {
     
-    if ([self.columnDelegate respondsToSelector:@selector(willUpdateContentOffsetForColumn:)] && !isResettingContent) {
+    if ([self.columnDelegate respondsToSelector:@selector(willUpdateContentOffsetForColumn:)]) {
         [self.columnDelegate willUpdateContentOffsetForColumn:self];
     }
-    if (!isResettingContent) {
+    if (!self.isResettingContent) {
         self.offsetDelta = contentOffset.y - self.contentOffset.y;
     }
     [super setContentOffset: contentOffset];
-    if ([self.columnDelegate respondsToSelector:@selector(didUpdateContentOffsetForColumn:)] && !isResettingContent) {
+    if ([self.columnDelegate respondsToSelector:@selector(didUpdateContentOffsetForColumn:)]) {
         [self.columnDelegate didUpdateContentOffsetForColumn:self];
     }
 }
@@ -333,6 +354,7 @@
 -(void) willMoveToSuperview:(UIView *)newSuperview {
     [super willMoveToSuperview:newSuperview];
     self.backgroundColor = [UIColor clearColor];
+    
     self.image = [[UIImageView alloc] initWithFrame: CGRectMake( kDefaultCellImageEdgeInset.left,
                                                                 kDefaultCellImageEdgeInset.top,
                                                                 self.frame.size.width - (kDefaultCellImageEdgeInset.left + kDefaultCellImageEdgeInset.right),

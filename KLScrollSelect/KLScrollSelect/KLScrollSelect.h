@@ -56,6 +56,7 @@
 @end
 
 @interface KLScrollingColumn : UITableView <UIScrollViewDelegate, UITableViewDelegate>
+@property (nonatomic) BOOL isResettingContent;
 @property (nonatomic, strong) id<KLScrollingColumnDelegate> columnDelegate;
 @property (nonatomic) CGFloat offsetDelta;
 @property (nonatomic) CGFloat scrollRate;

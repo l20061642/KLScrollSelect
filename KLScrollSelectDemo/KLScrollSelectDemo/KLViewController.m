@@ -39,7 +39,7 @@
 }
 - (CGFloat)scrollRateForColumnAtIndex: (NSInteger) index {
     
-    return 15 + index * 15;
+    return 150 + index * 15;
 }
 -(NSInteger) numberOfColumnsInScrollSelect:(KLScrollSelect *)scrollSelect {
     return 2;
